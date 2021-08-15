@@ -11,4 +11,14 @@ To view results, pull repository and extract "...Results.tar.gz" files to load .
 Pathway enrichment analysis is summarized in "out/tables" folder, and results are visualised in "out/figures" folder. 
 Leading edge genes can also be exported from listed DOSE::gseaResult objects.
 
-![Enrichment map plot of ](https://github.com/c-lonergan/nmf_gsea/tree/main/out/figures/Dataset_1/KEGG/M_emapplot.png?raw=true)
+The plots below demonstrate that subtracting the normal metagene from the medulloblastoma metagene exposes downregulation of synaptic vesicle cycle pathways in the medulloblastoma samples, where enrichment analysis of the medulloblastoma metagene did not.
+
+Enrichment map plot of metagene M minus metagene N
+![Enrichment map plot of metagene M minus metagene N](out/figures/Dataset_1/KEGG/MN_emapplot.png)
+Enrichment map plot of metagene M 
+![Enrichment map plot of metagene M](out/figures/Dataset_1/KEGG/M_emapplot.png)
+Dot plot of metagene M minus metagene N
+![Dot plot of metagene M minus metagene N](out/figures/Dataset_1/KEGG/MN_dotplot.png)
+Dot plot of metagene M
+![Dot plot of metagene M](out/figures/Dataset_1/KEGG/M_dotplot.png)
+
