@@ -11,3 +11,4 @@ To view results, pull repository and extract "...Results.tar.gz" files to load .
 Pathway enrichment analysis is summarized in "out/tables" folder, and results are visualised in "out/figures" folder. 
 Leading edge genes can also be exported from listed DOSE::gseaResult objects.
 
+![Enrichment map plot of ](https://github.com/c-lonergan/nmf_gsea/tree/main/out/figures/Dataset_1/KEGG/M_emapplot.png?raw=true)
