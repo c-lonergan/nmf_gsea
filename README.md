@@ -13,12 +13,15 @@ Leading edge genes can also be exported from listed DOSE::gseaResult objects.
 
 The plots below demonstrate that subtracting the normal metagene from the medulloblastoma metagene exposes downregulation of synaptic vesicle cycle pathways in the medulloblastoma samples, where enrichment analysis of the medulloblastoma metagene did not.
 
-Enrichment map plot of metagene M minus metagene N
-![Enrichment map plot of metagene M minus metagene N](out/figures/Dataset_1/KEGG/MN_emapplot.png)
-Enrichment map plot of metagene M 
-![Enrichment map plot of metagene M](out/figures/Dataset_1/KEGG/M_emapplot.png)
-Dot plot of metagene M minus metagene N
-![Dot plot of metagene M minus metagene N](out/figures/Dataset_1/KEGG/MN_dotplot.png)
-Dot plot of metagene M
-![Dot plot of metagene M](out/figures/Dataset_1/KEGG/M_dotplot.png)
+emapplots: MN vs M
+
+<img src="https://user-images.githubusercontent.com/72213939/129490964-f7a16c5c-ee8b-4b55-97bd-67d615c99ab5.png" width="45%"></img> <img src="https://user-images.githubusercontent.com/72213939/129490966-7194596a-e4fb-4dd1-b07b-821c2e0291f6.png" width="45%"></img> 
+
+dotplots: MN vs M
+
+<img src="https://user-images.githubusercontent.com/72213939/129491345-52f2e3f5-2ba0-490e-8a30-146e8cde2c5e.png" width="45%"></img> <img src="https://user-images.githubusercontent.com/72213939/129491351-0ccbc0ad-2f8b-4700-8174-32f8cad861a8.png" width="45%"></img> 
+
+cnetplots: MN vs M
+
+<img src="https://user-images.githubusercontent.com/72213939/129491425-216bb022-d961-4c85-a0a0-655135c98420.png" width="45%"></img> <img src="https://user-images.githubusercontent.com/72213939/129491427-42f0bbbb-f3af-4ab7-99b5-925ef7de2d2c.png" width="45%"></img> 
 
