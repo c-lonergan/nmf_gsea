@@ -1,0 +1,797 @@
+---
+title: "Identifying significantly enriched gene sets with NMF-derived metagenes and their difference vectors"
+author: "Charlie Lonergan"
+date: "13/08/2021"
+output: pdf_document
+---
+
+## Setup & Read Data
+
+```{r, warning=FALSE, message=FALSE}
+# Install packages
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("Biobase")
+BiocManager::install("NMF")
+BiocManager::install("fgsea")
+BiocManager::install("tidyverse")
+BiocManager::install("annotate")
+BiocManager::install("AnnotationDbi")
+BiocManager::install("hu6800.db")
+BiocManager::install("GO.db")
+BiocManager::install("msigdbr")
+BiocManager::install("clusterProfiler")
+BiocManager::install("enrichplot")
+BiocManager::install("DOSE")
+install.packages("ggplot2")
+install.packages("dplyr")
+
+```
+
+```{r, message=FALSE}
+# dplyr can be tricky
+remove.packages("rlang")
+install.packages("rlang")
+library(rlang)
+install.packages("dplyr")
+```
+
+```{r, message=FALSE}
+# Load packages
+library(dplyr)
+library(ggplot2)
+library(tibble)
+library(tidyverse)
+library(xtable)
+library(NMF)
+library(fgsea)
+library(annotate)
+library(hu6800.db)
+library(GO.db)
+library(msigdbr)
+library(clusterProfiler)
+library(enrichplot)
+library(DOSE)
+```
+
+```{r}
+# read in data
+gevals = read.delim("data/Dataset_1.gct", skip = 2)
+pure = read.csv("data/Dataset_2.csv")
+row.names(gevals) = gevals[,1]
+row.names(pure) = pure[,1]
+# remove gene names, description, and PNET samples
+gevals = gevals[,c(-1,-2, -37:-44)]
+pure = pure[,c(-1,-2)]
+```
+
+## NMF Analysis
+
+### GE data
+
+#### Additive method
+
+```{r}
+gevals_plus = gevals
+min(gevals_plus)
+for (i in 1:ncol(gevals_plus)) {
+  gevals_plus[,i] <- gevals_plus[,i] - min(gevals_plus[,i])
+}
+min(gevals_plus)
+rm(i)
+```
+
+```{r}
+# remove rows associated with "_st" probe suffixes
+index = c()
+j = 1
+for (i in 1:nrow(gevals_plus)) {
+  name = rownames(gevals_plus)[i]
+  if (substr(name, nchar(name)-2, nchar(name))!="_at") {
+    index[j]<-i
+    j <- j+1
+  }
+}
+gevals_plus <- gevals_plus[-index,]
+paste(length(index), "rows removed", sep = " ")
+rm(i,j,index, name)
+```
+
+```{r}
+# estimate nmf rank
+estim.ge1 = nmf(gevals_plus, 2:8, nrun=50, method = 'nsNMF', seed = 'random', .options = "v")
+plot(estim.ge1, main = "", what = c("cophenetic", "dispersion"))
+consensusmap(estim.ge1, tracks=NA, legend = F)
+```
+
+```{r}
+ge4_plus = nmf(gevals_plus, rank = 4, nrun = 50, method = 'nsNMF', seed = 'random', .options = "v")
+consensusmap(ge4_plus, main = "")
+coefmap(ge4_plus, main = "")
+```
+
+Additive approach does not produce a rank 4 decomposition.
+
+#### Zero replacement method
+
+```{r}
+# set negative values to 0
+# negative post-normalised values indicate low expression and can be removed
+min(gevals)
+gevals[gevals < 0] <- 0
+min(gevals)
+```
+
+```{r}
+# remove rows associated with "_st" probe suffixes
+# see http://www.affymetrix.com/support/help/faqs/mouse_430/faq_8.affx
+index = c()
+j = 1
+for (i in 1:nrow(gevals)) {
+  name = rownames(gevals)[i]
+  if (substr(name, nchar(name)-2, nchar(name))!="_at") {
+    index[j]<-i
+    j <- j+1
+  }
+}
+gevals <- gevals[-index,]
+paste(length(index), "rows removed", sep = " ")
+rm(i,j,index, name)
+```
+
+```{r}
+# delete rows with all 0 values
+zeros = tibble(matrix(data = "", nrow = 0, ncol = ncol(gevals)))
+index = c()
+
+for (i in 1:nrow(gevals)) {
+  if (all(gevals[i,]==0)) {
+    zeros <- rbind(zeros, gevals[i,])
+    index <- append(index, i)
+  }
+}
+gevals <- gevals[-1*index,]
+paste(nrow(zeros), "rows removed")
+rm(i, index, zeros)
+```
+
+```{r}
+# estimate nmf rank
+estim.ge = nmf(gevals, 2:8, nrun=50, method = 'nsNMF', seed = 'random', .options = "v")
+plot(estim.ge, main = "", what = c("cophenetic", "dispersion"))
+consensusmap(estim.ge, tracks=NA, legend = F)
+```
+
+Rank 4 identified by cophenetic and dispersion curves.
+
+```{r}
+# create nmf object
+ge4 = nmf(x = gevals, rank = 4, method = 'nsNMF', seed = 'random', .options = "v")
+# heatmaps
+consensusmap(ge4)
+coefmap(ge4)
+```
+```{r}
+# assign metagene names and check coefmap
+basisnames(ge4) <- c("R","N","G","M")
+coefmap(minfit(ge4),
+        main = "",
+        legend = F,
+        annLegend = F,
+        info = F)
+```
+
+### Purified data
+
+```{r}
+# check for rows with all 0 values
+test = c()
+for (i in 1:nrow(pure)) {
+  test <- append(test,sum(pure[i,]))
+}
+min(test)
+rm(test, i)
+```
+
+```{r}
+# remove rows associated with "_st" probe suffixes
+index = c()
+j = 1
+for (i in 1:nrow(pure)) {
+  name = rownames(pure)[i]
+  if (substr(name, nchar(name)-2, nchar(name))!="_at") {
+    index[j]<-i
+    j <- j+1
+  }
+}
+pure <- pure[-index,]
+paste(length(index), "rows removed", sep = " ")
+rm(i,j,index,name)
+```
+
+```{r}
+# estimate nmf rank
+estim.pu = nmf(pure, 2:8, nrun=50, method = 'nsNMF', seed = 'random', .options = "v")
+plot(estim.pu, main = "", what = c("cophenetic", "dispersion"))
+consensusmap(estim.pu, tracks=NA, legend = F)
+```
+
+```{r}
+# create nmf object
+pu4 = nmf(x = pure, rank = 4, nrun = 50, method = 'nsNMF', seed = 'random', .options = "v")
+# heatmaps
+consensusmap(pu4)
+coefmap(pu4)
+```
+
+```{r}
+# assign metagene names and check coefmap
+basisnames(pu4) <- c("M","R","N","G")
+coefmap(minfit(pu4),
+        main = "",
+        legend = F,
+        annLegend = F,
+        info = F)
+```
+
+```{r}
+# plot cophenetic curves
+plot(x = 2:8,
+     y = estim.ge[["measures"]][["cophenetic"]], 
+     ylim = c(0.92,1),
+     type = "l", 
+     col = "red",
+     xlab = "Rank r", 
+     ylab = "Cophenetic Correlation Coefficient", 
+     main = "Rank estimation: GE data")
+lines(x = 2:8, 
+      y = estim.pu[["measures"]][["cophenetic"]], 
+      col="blue",
+      lty=1)
+legend("bottomright", legend = c("Unpurified","Purified"), col = c("red","blue"),lty = c(1,1))
+
+```
+
+```{r}
+# quality measures
+clust = c(rep("M",10),rep("G",10),rep("R",10),rep("N",4))
+nmf_qual = rbind(cbind(unname(sparseness(ge4_plus)[1]),unname(sparseness(ge4_plus)[2]),purity(ge4_plus, clust),entropy(ge4_plus,clust)),
+                 cbind(unname(sparseness(ge4)[1]),unname(sparseness(ge4)[2]),purity(ge4, clust),entropy(ge4,clust)),
+             cbind(unname(sparseness(pu4)[1]),unname(sparseness(pu4)[2]),purity(pu4, clust),entropy(pu4,clust)))
+colnames(nmf_qual) <- c("sparseness(W)", "sparseness(H)", "purity", "entropy")
+rownames(nmf_qual) <- c("Dataset 1-A", "Dataset 1", "Dataset 2")
+xtable(nmf_qual)
+rm(clust, nmf_qual)
+```
+
+### Export plots
+
+```{r}
+# rank estimation curves
+png("./out/figures/coph_curve_combined.png", width = 800, height = 480, units = "px")
+opar <- par(mfrow = c(1, 2))
+# cophenetic 
+plot(x = 2:8,
+     y = estim.ge[["measures"]][["cophenetic"]], 
+     ylim = c(0.82,1),
+     type = "l", 
+     col = "red",
+     xlab = "r", 
+     ylab = "Cophenetic Correlation rho_r",
+     main = "")
+lines(x = 2:8, 
+      y = estim.ge1[["measures"]][["cophenetic"]], 
+      col="red",
+      lty=2)
+lines(x = 2:8, 
+      y = estim.pu[["measures"]][["cophenetic"]], 
+      col="blue",
+      lty=1)
+# dispersion
+plot(x = 2:8,
+     y = estim.ge[["measures"]][["dispersion"]], 
+     ylim = c(0.4,1),
+     type = "l", 
+     col = "red",
+     xlab = "r", 
+     ylab = "Dispersion delta_r",
+     main = "")
+lines(x = 2:8, 
+      y = estim.ge1[["measures"]][["dispersion"]], 
+      col="red",
+      lty=2)
+lines(x = 2:8, 
+      y = estim.pu[["measures"]][["dispersion"]], 
+      col="blue",
+      lty=1)
+legend("bottomright", legend = c("Dataset 1", "Dataset 1-A", "Dataset 2"), col = c("red","red","blue"), lty = c(1,2,1))
+par(opar)
+dev.off()
+rm(opar)
+```
+
+```{r}
+# consensus matrices
+png("./out/figures/consensus_1.png", width = 720)
+consensusmap(ge4, main = "", tracks=NA, Rowv = F)
+dev.off()
+png("./out/figures/consensus_1A.png", width = 720)
+consensusmap(ge4_plus, main = "", tracks=NA, Rowv = F)
+dev.off()
+png("./out/figures/consensus_2.png", width = 720)
+consensusmap(pu4, main = "", tracks=NA, Rowv = F)
+dev.off()
+# coefficient matrices
+png("./out/figures/coefmap_1.png", width = 720)
+coefmap(minfit(ge4), main = "", legend = T,  Colv = F, annLegend = F)
+dev.off()
+png("./out/figures/coefmap_1A.png", width = 720)
+coefmap(minfit(ge4_plus), main = "", legend = T, Colv = F, annLegend = F)
+dev.off()
+png("./out/figures/coefmap_2.png", width = 720)
+coefmap(minfit(pu4), main = "", legend = T, Colv = F, annLegend = F)
+dev.off()
+```
+
+```{r}
+# clear some space
+rm(gevals_plus, estim.ge1, ge4_plus)
+rm(estim.ge, estim.pu)
+rm(gevals, pure)
+```
+
+## Prepare data for gsea
+
+```{r}
+# W,H normalisation functions
+W_normalise = function(W){
+  n = nrow(W)
+  k = ncol(W)
+  W_new = matrix(0, nrow = n, ncol = k)
+  rownames(W_new) <- rownames(W)
+  colnames(W_new) <- colnames(W)
+  for (i in 1:k) {
+    W_new[,i] <- W[,i]/max(W[,i])
+  }
+  return(W_new)
+}
+
+H_normalise = function(H,W){
+  m = ncol(H)
+  k = ncol(W)
+  H_new = matrix(0, nrow = k, ncol = m)
+  rownames(H_new) <- rownames(H)
+  colnames(H_new) <- colnames(H)
+  for (i in 1:k) {
+    H_new[i,] <- max(W[,i])*H[i,]
+  }
+  return(H_new)
+}
+```
+
+### GE data
+
+```{r}
+# W,H decomposition
+W = basis(ge4)
+H = coef(ge4)
+W[1:5,]
+H[,1:5]
+A = W%*%H
+```
+
+```{r}
+# normalise 
+W_ = W_normalise(W)
+H_ = H_normalise(H,W)
+# check normalisation works
+(A - W_%*%H_)[1:5,1:5] # should be a zero matrix
+max(abs(A - W_%*%H_))
+```
+
+```{r}
+# inspect normalised clustering
+A_ <- nmf(W_%*%H_, rank = 4)
+coefmap(A_)
+```
+
+```{r}
+# W difference matrix
+dW = cbind(W_[,"G"]-W_[,"M"], 
+           W_[,"G"]-W_[,"R"], 
+           W_[,"G"]-W_[,"N"],
+           W_[,"M"]-W_[,"R"],
+           W_[,"M"]-W_[,"N"],
+           W_[,"R"]-W_[,"N"])
+colnames(dW) <- c("GM","GR","GN","MR","MN","RN")
+rownames(dW) <- rownames(W_)
+```
+
+```{r}
+# translate probe IDs to gene IDs
+probes = rownames(W_)
+genes = AnnotationDbi::select(hu6800.db, probes, c("SYMBOL","ENTREZID", "GENENAME"))
+# only keep "_at" suffixes - these relate to antisense strands only
+genes <- subset(genes, substr(genes$PROBEID, nchar(genes$PROBEID)-2, nchar(genes$PROBEID))=="_at")
+genes <- genes[!duplicated(genes$SYMBOL),]
+genes <- na.omit(genes)
+```
+
+```{r}
+# create dataframe with W values, probeIDs, genes, etc
+df = as_tibble(W_, rownames = "PROBEID")
+df <- cbind(df, dW)
+# remove NA's, merge by probeid
+df <- na.omit(merge(genes, df, by = "PROBEID"))
+# deduplicate by gene symbol
+df <- df[!duplicated(df$SYMBOL),]
+rownames(df)<-df$SYMBOL
+```
+
+```{r}
+# create ranked lists
+ranklists = function(frame, i){
+  return(sort(deframe(subset(frame, select = c(2,i))), decreasing = T))
+}
+ge_list = lapply(5:14, ranklists, frame = df)
+names(ge_list) <- colnames(df[,5:14])
+
+# e.g. NR unnecessary as NES(NR) ~ -1*NES(RN) etc.
+# 6/12 permutations are "mirror images"
+```
+
+### Pure data
+
+```{r}
+# W,H decomposition
+pW = basis(pu4)
+pH = coef(pu4)
+pW[1:5,]
+pH[,1:5]
+pA = pW%*%pH
+```
+
+```{r}
+# normalise W
+pW_ = W_normalise(pW)
+pH_ = H_normalise(pH,pW)
+# check normalisation works
+(pA - pW_%*%pH_)[1:5,1:5] # should be a zero matrix
+max(abs(pA - pW_%*%pH_))
+```
+
+```{r}
+# inspect normalised clustering
+pA_ <- nmf(pW_%*%pH_, rank = 4)
+coefmap(pA_)
+```
+
+```{r}
+# W difference matrix
+dW_pure = cbind(pW_[,"G"]-pW_[,"M"], 
+                pW_[,"G"]-pW_[,"R"], 
+                pW_[,"G"]-pW_[,"N"],
+                pW_[,"M"]-pW_[,"R"],
+                pW_[,"M"]-pW_[,"N"],
+                pW_[,"R"]-pW_[,"N"])
+colnames(dW_pure) <- c("GM","GR","GN","MR","MN","RN")
+rownames(dW_pure) <- rownames(pW_)
+```
+
+```{r}
+# annotate gene data
+probes_p = rownames(pW_)
+genes_p = AnnotationDbi::select(hu6800.db, probes_p, c("SYMBOL","ENTREZID", "GENENAME"))
+# only keep "_at" suffixes
+genes_p <- subset(genes_p, substr(genes_p$PROBEID, nchar(genes_p$PROBEID)-2, nchar(genes_p$PROBEID))=="_at")
+genes_p <- genes_p[!duplicated(genes_p$SYMBOL),]
+genes_p <- na.omit(genes_p)
+```
+
+```{r}
+# create dataframe with W values, probeIDs, genes, etc
+pf = as_tibble(pW_, rownames = "PROBEID")
+pf <- cbind(pf, dW_pure)
+# remove NA's, merge by probeid
+pf <- na.omit(merge(genes_p, pf, by = "PROBEID"))
+# deduplicate by gene symbol
+pf <- pf[!duplicated(pf$SYMBOL),]
+rownames(pf)<-pf$SYMBOL
+```
+
+```{r}
+# create ranked lists
+pu_list = lapply(5:14, ranklists, frame = pf)
+names(pu_list) <- colnames(pf[,5:14])
+```
+
+```{r}
+# combine genes for gsea later
+jenes <- merge(genes, genes_p, all = T, no.dups = T)
+jenes <- jenes[!duplicated(jenes$SYMBOL),]
+
+# tidy up
+rm(A, A_, pA, pA_, 
+   H, H_, pH, pH_, 
+   W, pW, dW, dW_pure)
+rm(H_normalise, W_normalise, ranklists)
+rm(genes, genes_p, pathways)
+```
+
+## GSEA
+
+```{r}
+# GSEA with GO
+gsea_GO = function(ranked, minval = 0, eps = 0){
+  # ranked gene names
+  gl <- names(ranked)
+  # convert to entrez
+  for (i in 1:length(gl)) {
+    gl[i] <- jenes$ENTREZID[which(jenes$SYMBOL==gl[i])]
+  }
+  names(ranked) <- gl
+  # exclude middle genes (optional)
+  ranked <- ranked[abs(ranked) >= minval]
+  # perform gsea, arbitrarily small pval
+  ggo = gseGO(gene = ranked, OrgDb = org.Hs.eg.db, eps = eps, verbose = T)
+  return(setReadable(ggo, OrgDb = org.Hs.eg.db))
+  rm(i,gl,ranked,minval)
+}
+```
+
+```{r}
+# GSEA with KEGG
+gsea_KEGG = function(ranked, minval = 0, eps = 0){
+  # ranked gene names
+  gl = names(ranked)
+  for (i in 1:length(gl)) {
+    gl[i] <- jenes$ENTREZID[which(jenes$SYMBOL==gl[i])]
+  }
+  names(ranked) <- gl
+  # exclude middle genes (optional)
+  ranked <- ranked[abs(ranked) >= minval]
+  # perform gsea, arbitrarily small pval
+  # gseKEGG not readable
+  return(gseKEGG(gene = ranked, organism = "hsa", eps = eps, verbose = T))
+  rm(i,gl,ranked,minval)
+}
+```
+
+```{r}
+go_ge = mapply(ge_list, FUN = gsea_GO, minval=0.01, eps = 1e-20)
+go_pu = mapply(pu_list, FUN = gsea_GO, minval=0.01, eps = 1e-20)
+kegg_ge = mapply(ge_list, FUN = gsea_KEGG, minval=0.01, eps = 1e-20)
+kegg_pu = mapply(pu_list, FUN = gsea_KEGG, minval=0.01, eps = 1e-20)
+```
+
+### Export tables & plots
+
+```{r}
+# compile results
+restable = function(gls){
+  tp = "GO"
+  if (gls[[1]]@setType == "KEGG") {
+    tp <- "KEGG"
+  }
+  # keep order
+  index = c("N","G","M","R","GM","GR","GN","MR","MN","RN")
+  # prepare df
+  tab = gls[[2]]@result[1,c(1,2,5,7,8,11)]
+  tab$gene.list = index[1]
+  tab <- cbind(tab$gene.list, tab[,1:6])
+  colnames(tab) <- c("gene.list", colnames(tab[,2:7]))
+  # append results to df
+  for (metagene in index) {
+    if (nrow(gls[[metagene]]@result)>0) {
+      temp = cbind(metagene, gls[[metagene]]@result[1:5,c(1,2,5,7,8,11)])
+      colnames(temp) <- colnames(tab)
+      tab <- rbind(tab, temp)
+    }
+  }
+  # tidy up
+  tab <- tab[-1,]
+  tab <- na.omit(tab)
+  return(tab)
+  rm(tp, metagene, index, tab, temp)
+}
+
+res_kegg_ge = restable(kegg_ge)
+res_go_ge = restable(go_ge)
+res_kegg_pu = restable(kegg_pu)
+res_go_pu = restable(go_pu)
+```
+
+```{r}
+# export results tables for LaTeX
+xlatable = function(gls, pth){
+  tp = "GO"
+  if (gls[[1]]@setType == "KEGG") {
+    tp <- "KEGG"
+  }
+  outpath = paste(pth, tp, "_table.txt", sep = "")
+  # keep order
+  index = c("N","G","M","R","GM","GR","GN","MR","MN","RN")
+  # prepare df
+  tab = gls[[2]]@result[1,c(1,2,5,7,8)]
+  tab$gene.list = index[1]
+  tab <- cbind(tab$gene.list, tab[,1:5])
+  colnames(tab) <- c("gene.list", colnames(tab[,2:6]))
+  # append results to df
+  for (metagene in index) {
+    if (nrow(gls[[metagene]]@result)>0) {
+      temp = cbind(metagene, gls[[metagene]]@result[1:5,c(1,2,5,7,8)])
+      colnames(temp) <- colnames(tab)
+      tab <- rbind(tab, temp)
+    }
+  }
+  # tidy up
+  tab <- tab[-1,]
+  tab <- na.omit(tab)
+  # export xtable
+  cap = paste("Top 5 ", tp, " pathways per metagene identified by GSEA", sep = "")
+  sink(outpath, append = F)
+  print(xtable(x = tab, 
+               caption = cap,
+               digits = 2, 
+               display = c("s","s","s","s","f","e","e"))
+        , include.rownames = FALSE)
+  sink(file = NULL)
+  rm(tp, metagene, outpath, pth, index, tab, temp, cap)
+}
+
+xlatable(go_ge,"./out/tables/Dataset_1/")
+xlatable(kegg_ge,"./out/tables/Dataset_1/")
+xlatable(go_pu,"./out/tables/Dataset_2/")
+xlatable(kegg_pu,"./out/tables/Dataset_2/")
+```
+
+```{r}
+# network plots
+xnetplot = function(gls, gl, pth){
+  tp = "GO"
+  if (gls[[1]]@setType == "KEGG") {
+    tp <- "KEGG"
+  }
+  for (i in 1:length(gls)) {
+    meta = names(gls)[i]
+    outpath = paste(pth, tp, "/", meta, "_network.png", sep = "")
+    if (nrow(gls[[i]]@result)>0) {
+      png(outpath, width = 960, height = 720, units = "px")
+      print(cnetplot(x = gls[[i]], 
+                     foldChange=gl[[i]], 
+                     circular = T, 
+                     max.overlaps = 1, 
+                     colorEdge = TRUE) 
+            + labs(title = paste(tp, " : ", meta, sep = "")))
+      dev.off()
+    }
+  }
+  rm(tp,i,meta,outpath)
+}
+
+xnetplot(gls = go_ge, gl = ge_list, pth = "./out/figures/Dataset_1/")
+xnetplot(gls = kegg_ge, gl = ge_list, pth = "./out/figures/Dataset_1/")
+xnetplot(gls = go_pu, gl = pu_list, pth = "./out/figures/Dataset_2/")
+xnetplot(gls = kegg_pu, gl = pu_list, pth = "./out/figures/Dataset_2/")
+```
+
+```{r}
+# dot plots
+xdotplot = function(gls, pth){
+  tp = "GO"
+  if (gls[[1]]@setType == "KEGG") {
+    tp <- "KEGG"
+  }
+  for (i in 1:length(gls)) {
+    meta = names(gls)[i]
+    outpath = paste(pth, tp, "/", meta, "_dotplot.png", sep = "")
+    if (nrow(gls[[i]]@result)>0) {
+      png(outpath, width = 960, height = 720, units = "px")
+      print(dotplot(gls[[i]]) + labs(title = paste(tp, " : ", meta, sep = "")))
+      dev.off()
+    }
+  }
+  rm(tp,i,meta,outpath)
+}
+xdotplot(gls = go_ge, pth = "./out/figures/Dataset_1/")
+xdotplot(gls = kegg_ge, pth = "./out/figures/Dataset_1/")
+xdotplot(gls = go_pu, pth = "./out/figures/Dataset_2/")
+xdotplot(gls = kegg_pu, pth = "./out/figures/Dataset_2/")
+```
+
+```{r}
+# enrichment map plots
+xmapplot = function(gls, pth, n, c){
+  tp = "GO"
+  if (gls[[1]]@setType == "KEGG") {
+    tp <- "KEGG"
+  }
+  for (i in 1:length(gls)) {
+    meta = names(gls)[i]
+    outpath = paste(pth, tp, "/", meta, "_emapplot.png", sep = "")
+    if (nrow(gls[[i]]@result)>1) {
+      png(outpath, width = 960, height = 720, units = "px")
+      print(emapplot(pairwise_termsim(gls[[i]]), 
+                     min_edge = n, 
+                     showCategory = c, 
+                     color = 'NES') 
+            + labs(title = paste(tp, " : ", meta, sep = "")))
+      dev.off()
+    }
+  }
+  rm(tp,i,meta,outpath,n,c)
+}
+
+xmapplot(gls = go_ge, pth = "./out/figures/Dataset_1/", n = 0.3, c = 10)
+xmapplot(gls = kegg_ge, pth = "./out/figures/Dataset_1/", n = 0.3, c = 10)
+xmapplot(gls = go_pu, pth = "./out/figures/Dataset_2/", n = 0.3, c = 10)
+xmapplot(gls = kegg_pu, pth = "./out/figures/Dataset_2/", n = 0.3, c = 10)
+```
+
+### Tables 2-4
+
+```{r}
+outersect <- function(x, y) {
+  sort(c(x[!x%in%y],
+         y[!y%in%x]))
+}
+vlookup = function(x,y){
+  x <- merge(x, y)
+  x <- x[which(x[,1]==x[,2]),]
+  x <- x[,-1]
+}
+```
+
+```{r}
+kglist = unique(rbind(res_kegg_ge[,2:3], res_kegg_pu[,2:3]))
+ge = unique(res_kegg_ge$ID)
+pu = unique(res_kegg_pu$ID)
+dif = outersect(ge,pu)
+kg_both = sort(intersect(ge,pu))
+kg_ge_only = sort(intersect(ge,dif))
+kg_pu_only = sort(intersect(pu,dif))
+kg_both <- vlookup(kg_both,kglist) %>% arrange(ID)
+kg_ge_only <- vlookup(kg_ge_only,kglist) %>% arrange(ID)
+kg_pu_only <- vlookup(kg_pu_only,kglist) %>% arrange(ID)
+```
+
+```{r}
+golist = unique(rbind(res_go_ge[,2:3], res_go_pu[,2:3]))
+ge = unique(res_go_ge$ID)
+pu = unique(res_go_pu$ID)
+dif = outersect(ge,pu)
+go_both = sort(intersect(ge,pu))
+go_ge_only = sort(intersect(ge,dif))
+go_pu_only = sort(intersect(pu,dif))
+go_both <- vlookup(go_both,golist) %>% arrange(ID)
+go_ge_only <- vlookup(go_ge_only,golist) %>%arrange(ID)
+go_pu_only <- vlookup(go_pu_only,golist)  %>% arrange(ID)
+```
+
+```{r}
+print(xtable(rbind(kg_pu_only,go_pu_only)), include.rownames = FALSE)
+```
+
+```{r}
+# Convert KEGG leading edges
+le = c("2670" , "894" , "2273" , "595" , "5156" , "10379" , "1026" , "896")
+for(g in le){
+  print(jenes[which(jenes$ENTREZID==g),2])
+}
+rm(g,le)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
