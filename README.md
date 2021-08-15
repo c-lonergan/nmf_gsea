@@ -7,7 +7,7 @@ R markdown demonstrates improved identification of key pathways involved in 3 CN
  - Pair-wise difference vectors are calculated, and GSEA results compared with those from each metagene.
  - Difference vectors identify several key pathways that are overlooked by use of metagenes alone. 
 
-To view results, pull repository and extract "...Results.tar.gz" files to load .RData files containing the results of nsNMF decompositions, and GSEA results for the decomposed RNA-seq data (Dataset 1) and an additional dataset that has undergone tumour purification (Dataset 2).
+To view results, pull repository and extract "...Results.tar.gz" files to load .RData files containing the results of nsNMF decompositions, GSEA results for the decomposed RNA-seq data (Dataset 1), and an additional dataset that has undergone tumour purification (Dataset 2).
 Pathway enrichment analysis is summarized in "out/tables" folder, and results are visualised in "out/figures" folder. 
 Leading edge genes can also be exported from listed DOSE::gseaResult objects.
 
