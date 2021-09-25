@@ -3,7 +3,7 @@
 
 R markdown demonstrates improved identification of key pathways involved in 3 CNS tumour subtypes: 
  - RNA-seq data is read, annotated, and cleaned.
- - nsNMF algorithm reduces dimensionality into 4 metagenes (incl. normal).
+ - nsNMF machine learning algorithm reduces dimensionality into 4 metagenes (incl. normal).
  - Pair-wise difference vectors are calculated, and GSEA results compared with those from each metagene.
  - Difference vectors identify several key pathways that are overlooked by use of metagenes alone. 
 
