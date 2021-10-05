@@ -13,7 +13,7 @@ A docker image containing the R packages used can be downloaded [here](https://w
 Pathway enrichment analysis is summarized in `out/tables` folder, and results are visualised in `out/figures` folder. 
 Leading edge genes can also be exported from listed `DOSE::gseaResult` objects.
 
-The plots below demonstrate that subtracting the normal metagene from the medulloblastoma metagene exposes downregulation of the synaptic vesicle cycle pathway hsa04721 in the medulloblastoma samples, where enrichment analysis of the medulloblastoma metagene did not.
+The plots below demonstrate that subtracting the normal metagene from the medulloblastoma metagene exposes downregulation of the synaptic vesicle cycle pathway "hsa04721" in the medulloblastoma samples, where enrichment analysis of the medulloblastoma metagene did not.
 
 emapplots: MN vs M
 
